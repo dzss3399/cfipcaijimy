@@ -42,7 +42,7 @@ if unique_ips:
     # 按IP地址的数字顺序排序（非字符串顺序）
     sorted_ips = sorted(unique_ips, key=lambda ip: [int(part) for part in ip.split('.')])
     
-    with open('ip.txt', 'w') as file:
+    with open('yxip.txt', 'w') as file:
         for ip in sorted_ips:
             file.write(ip + '\n')
     print(f'已保存 {len(sorted_ips)} 个唯一IP地址到yxip.txt文件。')
