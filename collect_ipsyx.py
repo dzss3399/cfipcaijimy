@@ -15,7 +15,7 @@ IPV4_URL = "https://www.cloudflare.com/ips-v4"
 OUTPUT_FILE = "yxip.txt"
 TIMEOUT = 6              # 测速超时（秒）
 MAX_WORKERS = 150        # 并发测速
-IPS_PER_CIDR = 500       # 每个 CIDR 取 500 个 IP
+IPS_PER_CIDR = 300       # 每个 CIDR 取 500 个 IP
 # ==============================================
 
 def get_ipv4_cidrs():
