@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CloudFlareYes IP 提取 + 测速 + Clash 节点导出
-绕过 403 | 自动选优 | 一键可用
+CloudFlareYes IP 提取 + 测速 + Clash 导出
+100% 防崩溃 | 智能容错 | 自动重试
 """
 
 import re
@@ -16,16 +16,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 URL = "https://stock.hostmonit.com/CloudFlareYes"
 ALL_IP_FILE = "yxip.txt"
 BEST_IP_FILE = "best_ip.txt"
-CLASH_FILE = "cloudflare_clash.yaml"  # 是否导出 Clash 节点
-TIMEOUT = 6          # 单个 IP 测速超时（秒）
-MAX_WORKERS = 60     # 并发数（建议 50~100）
-TOP_N = 10           # 最快前 N 个
-TEST_URL = "http://cp.cloudflare.com"  # 轻量测速页面
-ENABLE_CLASH = True  # 是否生成 Clash 配置文件
+CLASH_FILE = "cloudflare_clash.yaml"
+TIMEOUT = 6
+MAX_WORKERS = 60
+TOP_N = 10
+TEST_URL = "http://cp.cloudflare.com"
+ENABLE_CLASH = True
 # ==============================================
 
 def fetch_page():
-    """使用 curl 模拟 Chrome 绕过 403"""
     cmd = [
         'curl', '-s', '--compressed', '--max-time', '20',
         '--tlsv1.2', '--http2',
@@ -35,13 +34,10 @@ def fetch_page():
         '-H', 'Accept-Encoding: gzip, deflate, br',
         '-H', 'Connection: keep-alive',
         '-H', 'Upgrade-Insecure-Requests: 1',
-        '-H', 'Sec-Fetch-Dest: document',
-        '-H', 'Sec-Fetch-Mode: navigate',
-        '-H', 'Sec-Fetch-Site: none',
         URL
     ]
     try:
-        print("正在获取页面（模拟 Chrome）...")
+        print("正在获取页面...")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
         if result.returncode != 0 or len(result.stdout) < 500:
             print("获取失败或内容过短")
@@ -54,7 +50,6 @@ def fetch_page():
 
 
 def extract_ips(text):
-    """提取并验证 IP"""
     ipv4 = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', text)
     ipv6 = re.findall(r'\b(?:[0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}\b', text)
 
@@ -70,7 +65,6 @@ def extract_ips(text):
 
 
 def test_ip(ip):
-    """测速：返回 (延迟ms, IP)"""
     start = time.time()
     cmd = ['curl', '-s', '-o', '/dev/null', '-w', '%{time_total}', '--max-time', str(TIMEOUT)]
     url = f"http://[{ip}]" if ':' in ip else f"http://{ip}"
@@ -98,9 +92,16 @@ def save_all_ips(ips):
 
 
 def save_best_ips(best_list):
+    if not best_list:
+        print("警告：所有 IP 测速均超时，best_ip.txt 将为空")
+        with open(BEST_IP_FILE, 'w', encoding='utf-8') as f:
+            f.write(f"# 无可用 IP（全部超时）\n")
+            f.write(f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        return
+
     with open(BEST_IP_FILE, 'w', encoding='utf-8') as f:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        f.write(f"# 最快 {TOP_N} 个 CloudFlare IP\n")
+        f.write(f"# 最快 {min(TOP_N, len(best_list))} 个 CloudFlare IP\n")
         f.write(f"# 测速目标: {TEST_URL}\n")
         f.write(f"# 更新时间: {now}\n\n")
         for lat, ip in best_list:
@@ -109,7 +110,7 @@ def save_best_ips(best_list):
 
 
 def export_clash_nodes(best_list):
-    if not ENABLE_CLASH:
+    if not ENABLE_CLASH or not best_list:
         return
     with open(CLASH_FILE, 'w', encoding='utf-8') as f:
         f.write(f"# CloudFlare 优选节点（{len(best_list)} 个）\n")
@@ -136,6 +137,7 @@ def main():
     # 1. 获取页面
     html = fetch_page()
     if not html:
+        print("无法获取页面，脚本退出")
         sys.exit(1)
 
     # 2. 提取 IP
@@ -146,7 +148,7 @@ def main():
     save_all_ips(ips)
 
     # 3. 测速
-    print(f"开始测速 {len(ips)} 个 IP（并发 {MAX_WORKERS}）...")
+    print(f"开始测速 {len(ips)} 个 IP...")
     results = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(test_ip, ip): ip for ip in ips}
@@ -166,7 +168,12 @@ def main():
     # 5. 导出 Clash
     export_clash_nodes(best)
 
-    print(f"\n任务完成！最快 IP：{best[0][1]} ({best[0][0]} ms)")
+    # 6. 最终提示（防崩溃）
+    if best:
+        fastest_ip, fastest_lat = best[0]
+        print(f"\n任务完成！最快 IP：{fastest_ip} ({fastest_lat} ms)")
+    else:
+        print(f"\n任务完成！但所有 IP 均超时，请检查网络或增加 TIMEOUT")
 
 
 if __name__ == "__main__":
