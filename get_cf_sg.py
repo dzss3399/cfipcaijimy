@@ -1,8 +1,7 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cloudflare 官方 IPv4 → 每段 500 IP → 测速（新加坡）→ 最快 20 个 → yxip.txt（纯 IPv4）
+Cloudflare 官方 IPv4 → 每段 500 IP → 测速（SG/US/HK/JP）→ 各取最快 30 个 → SG.txt / US.txt / HK.txt / JP.txt
 """
 
 import requests
@@ -13,13 +12,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==================== 配置 ====================
 IPV4_URL = "https://www.cloudflare.com/ips-v4"
-OUTPUT_FILE = "yxip.txt"
-TIMEOUT = 6              # 测速超时（秒）
-MAX_WORKERS = 150        # 并发测速
-IPS_PER_CIDR = 300      # 每段取 500 个
-TOP_N = 20               # 最快 20 个
-# 新加坡测速目标（Cloudflare 官方，位于新加坡）
-TEST_URL = "http://sgp-ping.vultr.com"  # 轻量测速点（新加坡）
+TIMEOUT = 6
+MAX_WORKERS = 150
+IPS_PER_CIDR = 500
+TOP_N = 30
+
+# 测速节点（轻量、稳定、全球分布）
+TEST_POINTS = {
+    'SG': {'host': 'sgp-ping.vultr.com', 'location': '新加坡'},
+    'US': {'host': 'nj-us-ping.vultr.com', 'location': '美国 (新泽西)'},
+    'HK': {'host': 'hnd-jp-ping.vultr.com', 'location': '香港 (近邻)'},  # 香港无专用，借日本
+    'JP': {'host': 'hnd-jp-ping.vultr.com', 'location': '日本 (东京)'},
+}
 # ==============================================
 
 def get_ipv4_cidrs():
@@ -45,19 +49,18 @@ def expand_cidr_random(cidr, count=IPS_PER_CIDR):
     except:
         return []
 
-def test_ip_sg(ip):
-    """测速：使用新加坡节点测延迟"""
+def test_ip_geo(ip, host):
+    """测速指定节点"""
     cmd = [
         'curl', '-s', '-o', '/dev/null', '-w', '%{time_total}',
         '--max-time', str(TIMEOUT),
-        '--resolve', f"sgp-ping.vultr.com:80:{ip}",  # 强制使用目标 IP
-        TEST_URL
+        '--resolve', f"{host}:80:{ip}",
+        f"http://{host}"
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT + 2)
         if result.returncode == 0:
-            latency = round(float(result.stdout.strip()) * 1000, 2)
-            return latency, ip
+            return round(float(result.stdout.strip()) * 1000, 2), ip
         return float('inf'), ip
     except:
         return float('inf'), ip
@@ -80,30 +83,37 @@ def main():
         print("未生成任何 IP")
         return
 
-    print(f"\n总计 {len(all_ips)} 个 IPv4，开始测速（目标：新加坡）...")
-    results = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(test_ip_sg, ip): ip for ip in all_ips}
-        for future in as_completed(futures):
-            lat, ip = future.result()
-            if lat != float('inf'):
-                results.append((lat, ip))
-                print(f"  {ip} → {lat} ms (SG)")
-            else:
-                print(f"  {ip} → 超时")
+    # 为每个地区测速
+    results = {geo: [] for geo in TEST_POINTS}
+    for geo, info in TEST_POINTS.items():
+        host = info['host']
+        location = info['location']
+        print(f"\n开始测速 → {location}（{host}）...")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+            futures = {pool.submit(test_ip_geo, ip, host): ip for ip in all_ips}
+            for future in as_completed(futures):
+                lat, ip = future.result()
+                if lat != float('inf'):
+                    results[geo].append((lat, ip))
+                    print(f"  {ip} → {lat} ms ({location})")
+                else:
+                    print(f"  {ip} → 超时")
 
-    # 排序取最快 TOP_N
-    results.sort()
-    best_20 = results[:TOP_N]
+    # 排序并取前 TOP_N
+    best = {}
+    for geo in TEST_POINTS:
+        results[geo].sort()
+        best[geo] = results[geo][:TOP_N]
 
-    # 写入文件（纯 IP）
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        for _, ip in best_20:
-            f.write(ip + '\n')
+    # 写入文件
+    for geo, data in best.items():
+        filename = f"{geo}.txt"
+        with open(filename, 'w', encoding='utf-8') as f:
+            for _, ip in data:
+                f.write(ip + '\n')
+        print(f"\n{TEST_POINTS[geo]['location']} 最快 {len(data)} 个已保存 → {filename}")
 
-    print(f"\n完成！最快 {len(best_20)} 个 IPv4（新加坡延迟）已写入 → {OUTPUT_FILE}")
-    for i, (lat, ip) in enumerate(best_20, 1):
-        print(f"  #{i:2d} {ip}  ({lat} ms)")
+    print("\n所有任务完成！文件列表：SG.txt US.txt HK.txt JP.txt")
 
 if __name__ == "__main__":
     main()
