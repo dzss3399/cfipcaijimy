@@ -16,7 +16,7 @@ IPV4_URL = "https://www.cloudflare.com/ips-v4"
 OUTPUT_FILE = "yxip.txt"
 TIMEOUT = 6              # 测速超时（秒）
 MAX_WORKERS = 150        # 并发测速
-IPS_PER_CIDR = 500       # 每段取 500 个
+IPS_PER_CIDR = 300      # 每段取 500 个
 TOP_N = 20               # 最快 20 个
 # 新加坡测速目标（Cloudflare 官方，位于新加坡）
 TEST_URL = "http://sgp-ping.vultr.com"  # 轻量测速点（新加坡）
