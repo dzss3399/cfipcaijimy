@@ -1,132 +1,97 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+从 https://stock.hostmonit.com/CloudFlareYes 页面提取 IP 并保存到 yxip.txt
+"""
 
 import re
-import sys
-import subprocess
-import threading
-import queue
-import time
+import requests
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# 配置
+# ==================== 配置 ====================
 URL = "https://stock.hostmonit.com/CloudFlareYes"
-ALL_IP_FILE = "yxip.txt"
-BEST_IP_FILE = "best_ip.txt"
-TIMEOUT = 5        # 每个 IP 测速超时（秒）
-MAX_WORKERS = 50   # 并发线程数
-TOP_N = 10         # 保留最快的 N 个 IP
-TEST_URL = "http://cp.cloudflare.com"  # 用于测速的轻量页面
+OUTPUT_FILE = "yxip.txt"
+TIMEOUT = 15
+# ==============================================
 
-# 全局队列
-result_queue = queue.PriorityQueue()
+def get_page_content():
+    """使用真实浏览器头获取页面内容"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/130.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+    }
 
-def fetch_page_with_curl():
-    cmd = [
-        'curl', '-s', '--compressed', '--max-time', '15',
-        '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        '-H', 'Accept: text/html,application/xhtml+xml',
-        '-H', 'Accept-Language: en-US,en;q=0.5',
-        '-H', 'Connection: keep-alive',
-        URL
-    ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-        if result.returncode == 0 and len(result.stdout) > 500:
-            return result.stdout
-        else:
-            print("curl 返回内容异常")
-            return None
-    except Exception as e:
-        print(f"curl 失败: {e}")
+        print(f"正在访问: {URL}")
+        response = requests.get(URL, headers=headers, timeout=TIMEOUT)
+        response.raise_for_status()
+        print(f"页面获取成功！大小: {len(response.text)} 字符")
+        return response.text
+    except requests.exceptions.RequestException as e:
+        print(f"请求失败: {e}")
         return None
 
+
 def extract_ips(text):
+    """提取并过滤有效的 IPv4 和 IPv6"""
+    # IPv4 正则
     ipv4_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+    # IPv6 正则（简化版，匹配常见格式）
     ipv6_pattern = r'\b(?:[0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}\b'
 
     ipv4_list = re.findall(ipv4_pattern, text)
     ipv6_list = re.findall(ipv6_pattern, text)
 
-    valid_ipv4 = []
+    valid_ipv4 = set()
     for ip in ipv4_list:
-        parts = list(map(int, ip.split('.')))
-        if all(0 <= p <= 255 for p in parts) and not ip.startswith('0.'):
-            if ip != '255.255.255.255':
-                valid_ipv4.append(ip)
+        octets = ip.split('.')
+        if len(octets) != 4:
+            continue
+        if all(0 <= int(o) <= 255 for o in octets):
+            if not (ip.startswith('0.') or ip == '255.255.255.255' or ip.startswith('127.')):
+                valid_ipv4.add(ip)
 
-    valid_ipv6 = [ip for ip in ipv6_list if ':' in ip and not ip.startswith(':') and not ip.endswith(':')]
+    valid_ipv6 = {ip for ip in ipv6_list if ':' in ip and not ip.startswith(':') and not ip.endswith(':')}
 
-    return valid_ipv4, valid_ipv6
+    all_ips = sorted(valid_ipv4.union(valid_ipv6))
+    return all_ips
 
-def test_ip_speed(ip):
-    """测试单个 IP 的 HTTP 响应延迟"""
-    start_time = time.time()
-    cmd = [
-        'curl', '-s', '-o', '/dev/null', '-w', '%{time_total}', '--max-time', str(TIMEOUT),
-        '-H', 'Host: cp.cloudflare.com',
-        f'http://{ip}' if ':' not in ip else f'http://[{ip}]'
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT + 2)
-        if result.returncode == 0:
-            total_time = float(result.stdout.strip())
-            latency = round(total_time * 1000, 2)  # 毫秒
-            return ip, latency
-        else:
-            return ip, float('inf')
-    except:
-        return ip, float('inf')
+
+def save_to_file(ips):
+    """保存 IP 到 yxip.txt，带注释头"""
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        f.write(f"# CloudFlareYes IP List\n")
+        f.write(f"# 来源: {URL}\n")
+        f.write(f"# 更新时间: {now}\n")
+        f.write(f"# 共 {len(ips)} 个 IP\n\n")
+        for ip in ips:
+            f.write(ip + '\n')
+    print(f"成功保存 {len(ips)} 个 IP 到 {OUTPUT_FILE}")
+
 
 def main():
-    print(f"正在获取 {URL} ...")
-    html = fetch_page_with_curl()
+    html = get_page_content()
     if not html:
-        print("无法获取页面内容，脚本退出")
-        sys.exit(1)
+        print("无法获取页面内容，脚本退出。")
+        return
 
-    print(f"页面获取成功！正在提取 IP...")
-    ipv4_ips, ipv6_ips = extract_ips(html)
-    all_ips = sorted(set(ipv4_ips + ipv6_ips))
+    ips = extract_ips(html)
+    if not ips:
+        print("未提取到任何有效 IP。")
+        return
 
-    print(f"共提取 {len(all_ips)} 个 IP，开始测速（并发 {MAX_WORKERS}）...")
+    save_to_file(ips)
 
-    # 写入全部 IP
-    with open(ALL_IP_FILE, 'w', encoding='utf-8') as f:
-        f.write(f"# CloudFlareYes 全量 IP\n")
-        f.write(f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"# 共 {len(all_ips)} 个\n\n")
-        for ip in all_ips:
-            f.write(ip + '\n')
-
-    print(f"全部 IP 已保存到 {ALL_IP_FILE}")
-
-    # 测速
-    results = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_ip = {executor.submit(test_ip_speed, ip): ip for ip in all_ips}
-        for future in as_completed(future_to_ip):
-            ip, latency = future.result()
-            if latency != float('inf'):
-                results.append((latency, ip))
-                print(f"  {ip} -> {latency} ms")
-            else:
-                print(f"  {ip} -> 超时")
-
-    # 排序取最快 TOP_N
-    results.sort()
-    best_ips = results[:TOP_N]
-
-    # 写入最优 IP
-    with open(BEST_IP_FILE, 'w', encoding='utf-8') as f:
-        f.write(f"# 最快 {TOP_N} 个 CloudFlare IP\n")
-        f.write(f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"# 测速目标: {TEST_URL}\n\n")
-        for latency, ip in best_ips:
-            f.write(f"{ip}  # {latency} ms\n")
-
-    print(f"\n测速完成！最快 {min(TOP_N, len(best_ips))} 个 IP 已保存到 {BEST_IP_FILE}")
 
 if __name__ == "__main__":
     main()
