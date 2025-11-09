@@ -27,8 +27,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
-
+          pip install requests beautifulsoup4 
+          # 1. 安装 playwright 模块
+          pip install playwright
+          
+          # 2. 安装浏览器（必须！否则会报错）
+          playwright install chromium
+          
+          # 3. （可选）安装系统依赖（Linux 推荐）
+          playwright install-deps
+          
       # 执行
       - name: Run scripts
         run: |
