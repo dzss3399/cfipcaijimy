@@ -1,6 +1,7 @@
-# CloudFlareYes 全量 IP
-# 更新时间: 2025-11-09 03:15:28
-# 共 2 个
+# CloudFlareYes IP List
+# 来源: https://stock.hostmonit.com/CloudFlareYes
+# 更新时间: 2025-11-09 03:20:29
+# 共 2 个有效 IP
 
 1.0.1.1
 1.2.1.1
