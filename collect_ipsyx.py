@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CloudFlareYes IP 提取 + 测速 + Clash 导出
-100% 防崩溃 | 智能容错 | 自动重试
+CloudFlareYes IP 提取（浏览器渲染 JS）+ 测速 + Clash 导出
+解决 JS 动态加载问题 | 100% 提取完整 IP
 """
 
 import re
-import subprocess
 import sys
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from playwright.sync_api import sync_playwright
+import subprocess
 
 # ==================== 配置区 ====================
 URL = "https://stock.hostmonit.com/CloudFlareYes"
@@ -22,34 +23,34 @@ MAX_WORKERS = 60
 TOP_N = 10
 TEST_URL = "http://cp.cloudflare.com"
 ENABLE_CLASH = True
+WAIT_TIME = 5  # JS 渲染等待时间（秒）
 # ==============================================
 
-def fetch_page():
-    cmd = [
-        'curl', '-s', '--compressed', '--max-time', '20',
-        '--tlsv1.2', '--http2',
-        '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        '-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        '-H', 'Accept-Language: zh-CN,zh;q=0.9,en;q=0.8',
-        '-H', 'Accept-Encoding: gzip, deflate, br',
-        '-H', 'Connection: keep-alive',
-        '-H', 'Upgrade-Insecure-Requests: 1',
-        URL
-    ]
-    try:
-        print("正在获取页面...")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
-        if result.returncode != 0 or len(result.stdout) < 500:
-            print("获取失败或内容过短")
+def fetch_page_with_browser():
+    """使用 Playwright 渲染 JS 获取完整页面"""
+    with sync_playwright() as p:
+        try:
+            print("正在启动浏览器渲染 JS...")
+            browser = p.chromium.launch(headless=True)  # headless=True 为无头模式
+            page = browser.new_page(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+            )
+            page.goto(URL, wait_until="networkidle", timeout=30000)  # 等待网络空闲
+            time.sleep(WAIT_TIME)  # 额外等待 JS 加载
+            content = page.content()
+            browser.close()
+            if len(content) < 1000:
+                print("渲染后内容仍过短，可能加载失败")
+                return None
+            print(f"JS 渲染成功！页面大小: {len(content):,} 字符")
+            return content
+        except Exception as e:
+            print(f"浏览器渲染失败: {e}")
             return None
-        print(f"页面获取成功！大小: {len(result.stdout):,} 字符")
-        return result.stdout
-    except Exception as e:
-        print(f"请求异常: {e}")
-        return None
 
 
 def extract_ips(text):
+    """提取并验证 IP"""
     ipv4 = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', text)
     ipv6 = re.findall(r'\b(?:[0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}\b', text)
 
@@ -61,11 +62,13 @@ def extract_ips(text):
                 valid_ipv4.add(ip)
 
     valid_ipv6 = {ip for ip in ipv6 if ':' in ip and not ip.startswith(':') and not ip.endswith(':')}
-    return sorted(valid_ipv4.union(valid_ipv6))
+    all_ips = sorted(valid_ipv4.union(valid_ipv6))
+    print(f"提取到 {len(all_ips)} 个有效 IP")
+    return all_ips
 
 
 def test_ip(ip):
-    start = time.time()
+    """测速单个 IP"""
     cmd = ['curl', '-s', '-o', '/dev/null', '-w', '%{time_total}', '--max-time', str(TIMEOUT)]
     url = f"http://[{ip}]" if ':' in ip else f"http://{ip}"
     cmd += [url]
@@ -82,7 +85,7 @@ def test_ip(ip):
 def save_all_ips(ips):
     with open(ALL_IP_FILE, 'w', encoding='utf-8') as f:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        f.write(f"# CloudFlareYes 全量 IP\n")
+        f.write(f"# CloudFlareYes 全量 IP（JS 渲染提取）\n")
         f.write(f"# 来源: {URL}\n")
         f.write(f"# 更新时间: {now}\n")
         f.write(f"# 共 {len(ips)} 个\n\n")
@@ -93,9 +96,9 @@ def save_all_ips(ips):
 
 def save_best_ips(best_list):
     if not best_list:
-        print("警告：所有 IP 测速均超时，best_ip.txt 将为空")
+        print("警告：所有 IP 超时")
         with open(BEST_IP_FILE, 'w', encoding='utf-8') as f:
-            f.write(f"# 无可用 IP（全部超时）\n")
+            f.write(f"# 无可用 IP\n")
             f.write(f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         return
 
@@ -134,16 +137,16 @@ def export_clash_nodes(best_list):
 
 
 def main():
-    # 1. 获取页面
-    html = fetch_page()
+    # 1. 浏览器渲染
+    html = fetch_page_with_browser()
     if not html:
-        print("无法获取页面，脚本退出")
+        print("JS 渲染失败，脚本退出")
         sys.exit(1)
 
     # 2. 提取 IP
     ips = extract_ips(html)
     if not ips:
-        print("未提取到 IP")
+        print("未提取到 IP（页面可能无数据）")
         return
     save_all_ips(ips)
 
@@ -160,20 +163,18 @@ def main():
             else:
                 print(f"  {ip} → 超时")
 
-    # 4. 排序取最快
+    # 4. 选优 + 保存
     results.sort()
     best = results[:TOP_N]
     save_best_ips(best)
-
-    # 5. 导出 Clash
     export_clash_nodes(best)
 
-    # 6. 最终提示（防崩溃）
+    # 5. 总结
     if best:
         fastest_ip, fastest_lat = best[0]
-        print(f"\n任务完成！最快 IP：{fastest_ip} ({fastest_lat} ms)")
+        print(f"\n完成！最快 IP：{fastest_ip} ({fastest_lat} ms)")
     else:
-        print(f"\n任务完成！但所有 IP 均超时，请检查网络或增加 TIMEOUT")
+        print("\n完成！但所有 IP 超时，请检查网络。")
 
 
 if __name__ == "__main__":
