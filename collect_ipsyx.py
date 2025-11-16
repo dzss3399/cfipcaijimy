@@ -42,6 +42,18 @@ def expand_cidr_random(cidr, count=IPS_PER_CIDR):
     except:
         return []
 
+
+def keep_alive():
+    url = "https://dtt3399-myspace.hf.space"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            print(f"成功保活！状态码: {response.status_code} | 时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            print(f"失败！状态码: {response.status_code}")
+    except Exception as e:
+        print(f"错误: {e}")
+        
 def test_ip(ip):
     """测速：返回 (延迟ms, IP) 或 (inf, ip)"""
     cmd = ['curl', '-s', '-o', '/dev/null', '-w', '%{time_total}', '--max-time', str(TIMEOUT), f"http://{ip}"]
@@ -56,6 +68,7 @@ def test_ip(ip):
 
 def main():
     print("正在获取 Cloudflare 官方 IPv4 CIDR...")
+    keep_alive()
     cidrs = get_ipv4_cidrs()
     if not cidrs:
         print("获取失败")
