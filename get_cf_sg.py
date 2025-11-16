@@ -3,7 +3,7 @@
 """
 Cloudflare 官方 IPv4 → 每段 500 IP → 测速（SG/US/HK/JP）→ 各取最快 30 个 → SG.txt / US.txt / HK.txt / JP.txt
 """
-
+import time
 import requests
 import ipaddress
 import subprocess
@@ -25,6 +25,21 @@ TEST_POINTS = {
     'JP': {'host': 'hnd-jp-ping.vultr.com', 'location': '日本 (东京)'},
 }
 # ==============================================
+
+
+def keep_alive():
+    url = "https://dtt3399-myspace.hf.space"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            print(f"成功保活！状态码: {response.status_code} | 时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            print(f"失败！状态码: {response.status_code}")
+    except Exception as e:
+        print(f"错误: {e}")
+
+
+
 
 def get_ipv4_cidrs():
     """获取官方 IPv4 CIDR 列表"""
@@ -67,6 +82,8 @@ def test_ip_geo(ip, host):
 
 def main():
     print("正在获取 Cloudflare 官方 IPv4 CIDR...")
+    # 运行一次
+    keep_alive()
     cidrs = get_ipv4_cidrs()
     if not cidrs:
         print("获取失败")
