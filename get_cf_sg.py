@@ -17,6 +17,10 @@ MAX_WORKERS = 150
 IPS_PER_CIDR = 300
 TOP_N = 30
 
+DYNV6_HOSTNAME = "mythink.dns.army"
+DYNV6_TOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
+
+
 # 测速节点（轻量、稳定、全球分布）
 TEST_POINTS = {
     'SG': {'host': 'sgp-ping.vultr.com', 'location': '新加坡'},
@@ -25,6 +29,23 @@ TEST_POINTS = {
     'JP': {'host': 'hnd-jp-ping.vultr.com', 'location': '日本 (东京)'},
 }
 # ==============================================
+
+def update_dynv6(ip):
+    url = "http://dynv6.com/api/update"
+    params = {
+        "hostname": DYNV6_HOSTNAME,
+        "token": DYNV6_TOKEN,
+        "ipv4": ip
+    }
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            print(f"✅ dynv6 更新成功 → {ip}")
+            print(f"返回内容: {r.text.strip()}")
+        else:
+            print(f"❌ dynv6 更新失败，状态码: {r.status_code}")
+    except Exception as e:
+        print(f"❌ dynv6 请求异常: {e}")
 
 
 def keep_alive():
@@ -129,7 +150,13 @@ def main():
             for _, ip in data:
                 f.write(ip + '\n')
         print(f"\n{TEST_POINTS[geo]['location']} 最快 {len(data)} 个已保存 → {filename}")
-
+        
+        # ⭐ 如果是 SG，取第一个 IP 更新 dynv6
+        if geo == "SG" and data:
+            fastest_ip = data[0][1]
+            print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
+            update_dynv6(fastest_ip)
+            
     print("\n所有任务完成！文件列表：SG.txt US.txt HK.txt JP.txt")
 
 if __name__ == "__main__":
