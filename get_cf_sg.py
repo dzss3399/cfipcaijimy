@@ -23,6 +23,9 @@ DYNV6_TOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
 DYNV6_USHOSTNAME = "usthink.dns.army"
 DYNV6_USTOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
 
+DYNV6_JPHOSTNAME = "jpthink.dns.army"
+DYNV6_JPTOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
+
 # 测速节点（轻量、稳定、全球分布）
 TEST_POINTS = {
     'SG': {'host': 'sgp-ping.vultr.com', 'location': '新加坡'},
@@ -55,6 +58,23 @@ def update_usdynv6(ip):
     params = {
         "hostname": DYNV6_USHOSTNAME,
         "token": DYNV6_USTOKEN,
+        "ipv4": ip
+    }
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            print(f"✅ dynv6 更新成功 → {ip}")
+            print(f"返回内容: {r.text.strip()}")
+        else:
+            print(f"❌ dynv6 更新失败，状态码: {r.status_code}")
+    except Exception as e:
+        print(f"❌ dynv6 请求异常: {e}")
+
+def update_jpdynv6(ip):
+    url = "http://dynv6.com/api/update"
+    params = {
+        "hostname": DYNV6_JPHOSTNAME,
+        "token": DYNV6_JPTOKEN,
         "ipv4": ip
     }
     try:
@@ -181,6 +201,12 @@ def main():
             fastest_ip = data[0][1]
             print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
             update_usdynv6(fastest_ip)
+
+        # ⭐ 如果是 US，取第一个 IP 更新 dynv6
+        if geo == "US" and data:
+            fastest_ip = data[0][1]
+            print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
+            update_jpdynv6(fastest_ip)
     
     print("\n所有任务完成！文件列表：SG.txt US.txt HK.txt JP.txt")
 
