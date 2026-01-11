@@ -203,7 +203,7 @@ def main():
             update_usdynv6(fastest_ip)
 
         # ⭐ 如果是 US，取第一个 IP 更新 dynv6
-        if geo == "US" and data:
+        if geo == "JP" and data:
             fastest_ip = data[0][1]
             print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
             update_jpdynv6(fastest_ip)
