@@ -313,14 +313,14 @@ def main():
             print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
             update_jpdynv6(fastest_ip)
 
-# ======== alive.txt 自动选择最低延迟 443 IP 并更新 dynv6 ========
-print("\n🚀 从 alive.txt 自动选择最低延迟 443 IP（proxyipmy）...")
-best_alive_ip = select_fastest_alive_443_ip()
-if best_alive_ip:
-    update_dynv6_proxy(best_alive_ip)
-else:
-    print("❌ 未选出可用 IP，跳过 proxyipmy.dns.army 更新")
-# =============================================================
+    # ======== alive.txt 自动选择最低延迟 443 IP 并更新 dynv6 ========
+    print("\n🚀 从 alive.txt 自动选择最低延迟 443 IP（proxyipmy）...")
+    best_alive_ip = select_fastest_alive_443_ip()
+    if best_alive_ip:
+        update_dynv6_proxy(best_alive_ip)
+    else:
+        print("❌ 未选出可用 IP，跳过 proxyipmy.dns.army 更新")
+    # =============================================================
 
     
     print("\n所有任务完成！文件列表：SG.txt US.txt HK.txt JP.txt")
