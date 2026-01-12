@@ -61,8 +61,8 @@ def update_dynv6(ip):
             print(f"返回内容: {r.text.strip()}")
         else:
             print(f"❌ dynv6 更新失败，状态码: {r.status_code}")
-    except Exception as e:
-        print(f"❌ dynv6 请求异常: {e}")
+        except Exception as e:
+            print(f"❌ dynv6 请求异常: {e}")
 
 
 def update_usdynv6(ip):
