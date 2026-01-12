@@ -188,6 +188,63 @@ def select_fastest_alive_443_ip():
     print(f"🏆 alive.txt 最快 IP: {best[1]} → {best[0]} ms")
     return best[1]
 
+def update_proxyipmy_from_alive():
+    """
+    读取 alive.txt 中 SG 443 IP
+    用 https://checkproxyip.918181.xyz/check?proxyip= 判断可用性
+    第一个返回包含 'success' 的 IP 更新到 proxyipmy.dns.army
+    """
+    try:
+        r = requests.get(ALIVE_TXT_URL, timeout=10)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"❌ 读取 alive.txt 失败: {e}")
+        return
+
+    sg_ips = []
+    for line in r.text.splitlines():
+        parts = line.strip().split(",")
+        if len(parts) >= 3:
+            ip, port, cc = parts[0].strip(), parts[1].strip(), parts[2].strip()
+            if port == "443" and cc.upper() == "SG":
+                sg_ips.append(ip)
+
+    if not sg_ips:
+        print("❌ alive.txt 没有 SG 443 IP")
+        return
+
+    print(f"📡 检测 {len(sg_ips)} 个 SG 443 IP 可用性...")
+    for ip in sg_ips:
+        check_url = f"https://checkproxyip.918181.xyz/check?proxyip={ip}"
+        try:
+            r = requests.get(check_url, timeout=5)
+            if r.status_code == 200 and "success" in r.text.lower():
+                print(f"✅ 第一个可用 SG IP: {ip} → 更新 proxyipmy.dns.army")
+                # 更新 dynv6
+                url = "http://dynv6.com/api/update"
+                params = {
+                    "hostname": DYNV6_PROXY_HOSTNAME,
+                    "token": DYNV6_PROXY_TOKEN,
+                    "ipv4": ip
+                }
+                try:
+                    r2 = requests.get(url, params=params, timeout=10)
+                    if r2.status_code == 200:
+                        print(f"✅ dynv6 更新成功 → {ip}")
+                        print(f"返回内容: {r2.text.strip()}")
+                    else:
+                        print(f"❌ dynv6 更新失败，状态码: {r2.status_code}")
+                except Exception as e2:
+                    print(f"⚠️ dynv6 更新异常 → {ip} | {e2}")
+                return
+            else:
+                print(f"❌ IP 不可用: {ip}")
+        except Exception as e:
+            print(f"⚠️ 检测异常: {ip} | {e}")
+
+    print("❌ 未找到可用 SG IP，跳过更新")
+
+
 def update_dynv6_proxy(ip):
     url = "http://dynv6.com/api/update"
     params = {
@@ -313,14 +370,8 @@ def main():
             print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
             update_jpdynv6(fastest_ip)
 
-    # ======== alive.txt 自动选择最低延迟 443 IP 并更新 dynv6 ========
-    print("\n🚀 从 alive.txt 自动选择最低延迟 443 IP（proxyipmy）...")
-    best_alive_ip = select_fastest_alive_443_ip()
-    if best_alive_ip:
-        update_dynv6_proxy(best_alive_ip)
-    else:
-        print("❌ 未选出可用 IP，跳过 proxyipmy.dns.army 更新")
-    # =============================================================
+    print("\n🚀 从 alive.txt SG 443 IP 更新 proxyipmy.dns.army")
+    update_proxyipmy_from_alive()
 
     
     print("\n所有任务完成！文件列表：SG.txt US.txt HK.txt JP.txt")
