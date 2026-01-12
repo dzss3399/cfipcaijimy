@@ -26,6 +26,18 @@ DYNV6_USTOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
 DYNV6_JPHOSTNAME = "jpthink.dns.army"
 DYNV6_JPTOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
 
+# ======== alive.txt 自动优选 443 IP（新增） ========
+ALIVE_TXT_URL = "https://raw.githubusercontent.com/ddwx3399/Emilia/refs/heads/main/Data/alive.txt"
+
+DYNV6_PROXY_HOSTNAME = "proxyipmy.dns.army"
+DYNV6_PROXY_TOKEN = "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"
+
+ALIVE_TEST_HOST = "www.cloudflare.com"
+ALIVE_TIMEOUT = 5
+ALIVE_MAX_WORKERS = 30
+# ================================================
+
+
 # 测速节点（轻量、稳定、全球分布）
 TEST_POINTS = {
     'SG': {'host': 'sgp-ping.vultr.com', 'location': '新加坡'},
@@ -99,6 +111,99 @@ def keep_alive():
         print(f"错误: {e}")
 
 
+def get_alive_443_ips():
+    """
+    CSV 格式:
+    IP,PORT,CC,ORG
+    只取 PORT=443
+    """
+    ips = []
+    try:
+        r = requests.get(ALIVE_TXT_URL, timeout=10)
+        r.raise_for_status()
+        for line in r.text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            parts = line.split(",")
+            if len(parts) < 2:
+                continue
+
+            ip = parts[0].strip()
+            port = parts[1].strip()
+
+            if port == "443":
+                ips.append(ip)
+
+    except Exception as e:
+        print(f"❌ 读取 alive.txt 失败: {e}")
+
+    return ips
+
+def test_alive_ip_443(ip):
+    cmd = [
+        "curl",
+        "-s",
+        "-o", "/dev/null",
+        "-w", "%{time_total}",
+        "--connect-timeout", str(ALIVE_TIMEOUT),
+        "--max-time", str(ALIVE_TIMEOUT),
+        "--resolve", f"{ALIVE_TEST_HOST}:443:{ip}",
+        f"https://{ALIVE_TEST_HOST}"
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode == 0:
+            return round(float(r.stdout.strip()) * 1000, 2), ip
+    except:
+        pass
+    return float("inf"), ip
+
+def select_fastest_alive_443_ip():
+    ips = get_alive_443_ips()
+    if not ips:
+        print("❌ alive.txt 中没有 443 IP")
+        return None
+
+    print(f"\n📡 alive.txt 发现 {len(ips)} 个 443 IP，开始测速...")
+
+    results = []
+    with ThreadPoolExecutor(max_workers=ALIVE_MAX_WORKERS) as pool:
+        futures = [pool.submit(test_alive_ip_443, ip) for ip in ips]
+        for f in as_completed(futures):
+            lat, ip = f.result()
+            if lat != float("inf"):
+                results.append((lat, ip))
+                print(f"  {ip} → {lat} ms")
+            else:
+                print(f"  {ip} → 超时")
+
+    if not results:
+        print("❌ 所有 443 IP 测试失败")
+        return None
+
+    results.sort()
+    best = results[0]
+    print(f"🏆 alive.txt 最快 IP: {best[1]} → {best[0]} ms")
+    return best[1]
+
+def update_dynv6_proxy(ip):
+    url = "http://dynv6.com/api/update"
+    params = {
+        "hostname": DYNV6_PROXY_HOSTNAME,
+        "token": DYNV6_PROXY_TOKEN,
+        "ipv4": ip
+    }
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            print(f"✅ dynv6 更新成功 → {DYNV6_PROXY_HOSTNAME} → {ip}")
+            print(f"返回内容: {r.text.strip()}")
+        else:
+            print(f"❌ dynv6 更新失败，状态码: {r.status_code}")
+    except Exception as e:
+        print(f"❌ dynv6 请求异常: {e}")
 
 
 def get_ipv4_cidrs():
@@ -207,6 +312,16 @@ def main():
             fastest_ip = data[0][1]
             print(f"\n🚀 使用 SG 最快 IP 更新 dynv6: {fastest_ip}")
             update_jpdynv6(fastest_ip)
+
+# ======== alive.txt 自动选择最低延迟 443 IP 并更新 dynv6 ========
+print("\n🚀 从 alive.txt 自动选择最低延迟 443 IP（proxyipmy）...")
+best_alive_ip = select_fastest_alive_443_ip()
+if best_alive_ip:
+    update_dynv6_proxy(best_alive_ip)
+else:
+    print("❌ 未选出可用 IP，跳过 proxyipmy.dns.army 更新")
+# =============================================================
+
     
     print("\n所有任务完成！文件列表：SG.txt US.txt HK.txt JP.txt")
 
