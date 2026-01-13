@@ -41,8 +41,9 @@ jobs:
       - name: Run scripts
         run: |
           python ${{ github.workspace }}/collect_ips.py
-         #  python ${{ github.workspace }}/get_cf_sg.py
           python ${{ github.workspace }}/youxuan.py
+          # python ${{ github.workspace }}/get_cf_sg.py
+          
 
           
       - name: Commit and push changes
