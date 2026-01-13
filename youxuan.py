@@ -141,7 +141,7 @@ def update_proxy_from_alive():
         except:
             continue
 
-    print("❌ alive.txt 中未找到可用 SG 反代 IP")
+    print("❌ alive.txt 中未找到可用 US 反代 IP")
 
 
 # ---------------- main ----------------
