@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ================= 配置 =================
 IPV4_URL = "https://www.cloudflare.com/ips-v4"
-IPS_PER_CIDR = 1000
+IPS_PER_CIDR = 500
 MAX_WORKERS = 100
 TOP_N = 30
 TRACE_TIMEOUT = 4
