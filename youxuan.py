@@ -29,7 +29,7 @@ DYNV6 = {
 
 # colo 映射
 COLO_MAP = {
-    "SG": {"SIN"},
+    "SG": {"SIN"}
     "JP": {"NRT", "HND", "KIX", "ITM", "FUK", "OSA"},
     "US": {
         "LAX", "SJC", "SEA", "ORD", "DFW",
@@ -87,28 +87,36 @@ def trace_ip(ip):
 
 def cloudflare_landing():
     cidrs = get_cf_cidrs()
-    pool_ips = []
+    all_ips = []
     for c in cidrs:
-        pool_ips.extend(map(str, expand_cidr(c)))
+        all_ips.extend(map(str, expand_cidr(c)))
 
-    results = {"SG": [], "US": [], "JP": []}
+    for region, colos in COLO_MAP.items():
+        print(f"\n🌍 扫描区域 {region}...")
+        found = []
 
-    with ThreadPoolExecutor(MAX_WORKERS) as pool:
-        futures = [pool.submit(trace_ip, ip) for ip in pool_ips]
-        for f in as_completed(futures):
-            ip, colo = f.result()
-            if not colo:
-                continue
-            for region, colos in COLO_MAP.items():
-                if any(colo.startswith(c) for c in colos) and len(results[region]) < TOP_N:
-                    results[region].append(ip)
+        with ThreadPoolExecutor(MAX_WORKERS) as pool:
+            futures = [pool.submit(trace_ip, ip) for ip in all_ips]
 
-    for region, ips in results.items():
+            for f in as_completed(futures):
+                ip, colo = f.result()
+                if not colo:
+                    continue
+                if any(colo.startswith(c) for c in colos):
+                    found.append(ip)
+                    print(f"  ✅ {ip} → {colo}")
+                if len(found) >= TOP_N:
+                    break
+
         with open(f"{region}.txt", "w") as f:
-            for ip in ips:
+            for ip in found:
                 f.write(ip + "\n")
-        if ips:
-            dynv6_update(*DYNV6[region], ips[0])
+
+        if found:
+            dynv6_update(*DYNV6[region], found[0])
+        else:
+            print(f"⚠️ {region} 未命中任何 IP")
+
 
 
 # ---------- 线路二：alive.txt 反代 ----------
