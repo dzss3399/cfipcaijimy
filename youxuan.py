@@ -22,9 +22,9 @@ TRACE_TIMEOUT = 4
 
 # dynv6
 DYNV6 = {
-    "SG": ("mythink.dns.army", "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"),
+#    "SG": ("mythink.dns.army", "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"),
     "US": ("usthink.dns.army", "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"),
-    "JP": ("jpthink.dns.army", "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"),
+#    "JP": ("jpthink.dns.army", "sKzuT7Sowr-uTpQSuS-JmY5ejAQTy8"),
 }
 
 # colo 映射
