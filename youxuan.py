@@ -29,7 +29,7 @@ DYNV6 = {
 
 # colo 映射
 COLO_MAP = {
-    "SG": {"SIN"}
+    "SG": {"SIN"},
     "JP": {"NRT", "HND", "KIX", "ITM", "FUK", "OSA"},
     "US": {
         "LAX", "SJC", "SEA", "ORD", "DFW",
