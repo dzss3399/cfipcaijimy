@@ -121,7 +121,7 @@ def update_proxy_from_alive():
         if len(parts) < 3:
             continue
         ip, port, cc = parts[:3]
-        if port != "443" or cc != "SG":
+        if port != "443" or cc != "US":
             continue
 
         try:
