@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ================= 配置 =================
 IPV4_URL = "https://www.cloudflare.com/ips-v4"
-IPS_PER_CIDR = 100
+IPS_PER_CIDR = 500
 MAX_WORKERS = 50
 TOP_N = 30
 TRACE_TIMEOUT = 4
@@ -30,8 +30,11 @@ DYNV6 = {
 # colo 映射
 COLO_MAP = {
     "SG": {"SIN"},
-    "US": {"LAX", "SJC", "SEA", "ORD", "DFW", "IAD", "EWR"},
-    "JP": {"NRT", "HND", "KIX"},
+    "JP": {"NRT", "HND", "KIX", "ITM", "FUK", "OSA"},
+    "US": {
+        "LAX", "SJC", "SEA", "ORD", "DFW",
+        "IAD", "EWR", "ATL", "MIA", "DEN"
+    }
 }
 
 # alive.txt
@@ -97,7 +100,7 @@ def cloudflare_landing():
             if not colo:
                 continue
             for region, colos in COLO_MAP.items():
-                if colo in colos and len(results[region]) < TOP_N:
+                if any(colo.startswith(c) for c in colos) and len(results[region]) < TOP_N:
                     results[region].append(ip)
 
     for region, ips in results.items():
