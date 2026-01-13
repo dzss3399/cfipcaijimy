@@ -90,7 +90,9 @@ def cloudflare_landing():
     all_ips = []
     for c in cidrs:
         all_ips.extend(map(str, expand_cidr(c)))
-
+        
+    random.shuffle(all_ips)
+    
     for region, colos in COLO_MAP.items():
         print(f"\n🌍 扫描区域 {region}...")
         found = []
